@@ -1,51 +1,51 @@
 # facturas-mcp
 
-MCP server (stdio) for drafting and issuing Spanish invoices under VERI*FACTU through a third-party provider that is already a compliant SIF ([BeeL](https://beel.es)).
+Servidor MCP (stdio) para preparar y emitir facturas españolas con VERI*FACTU a través de un proveedor externo que ya es un SIF conforme ([BeeL](https://beel.es)).
 
-This server does **not** implement a SIF itself: no hash chain, no SOAP to the AEAT, no declaración responsable. BeeL does all of that. This server adds:
+Este servidor **no** es un SIF por sí mismo: no calcula huellas ni encadena registros, no se comunica por SOAP con la AEAT y no presenta declaración responsable. De todo eso se encarga BeeL. Lo que aporta este servidor es:
 
-- local drafts
-- exact amounts
-- IRPF on services only
-- the "already paid" amount
-- a confirmation guard
-- sandbox by default
-- a series that never reuses a number
+- borradores locales
+- importes exactos
+- IRPF solo en los servicios
+- el importe ya pagado
+- un control de confirmación
+- sandbox por defecto
+- una serie que nunca reutiliza un número
 
-The provider comparison and the reasons for BeeL are in [RESEARCH.md](RESEARCH.md).
+La comparativa de proveedores y los motivos para elegir BeeL están en [RESEARCH.md](RESEARCH.md).
 
-## Tools
+## Herramientas
 
-| Tool | What it does | Calls the provider? |
+| Herramienta | Qué hace | ¿Llama al proveedor? |
 |---|---|---|
-| `crear_borrador` | Validates the client and lines, then computes base, IVA, IRPF (service lines only), total, already paid and amount due. Saves a local draft and returns a readable summary. | No |
-| `emitir_factura` | Issues a draft with the next number of the series. Requires `confirm: true`. Uses the sandbox unless the server has `FACTURAS_ENV=production`. | Yes |
-| `descargar_pdf` | Downloads the PDF (with the VERI*FACTU QR) of an issued invoice to the local PDF folder. | Yes |
-| `listar_facturas` | Lists drafts and issued invoices: number, date, client, total, status. | No |
+| `crear_borrador` | Valida el cliente y las líneas, y calcula la base, el IVA, el IRPF (solo en las líneas de servicio), el total, lo ya pagado y el importe pendiente. Guarda un borrador local y devuelve un resumen legible. | No |
+| `emitir_factura` | Emite un borrador con el siguiente número de la serie. Exige `confirm: true`. Usa el sandbox salvo que el servidor tenga `FACTURAS_ENV=production`. | Sí |
+| `descargar_pdf` | Descarga el PDF (con el QR VERI*FACTU) de una factura emitida y lo guarda en la carpeta local de PDF. | Sí |
+| `listar_facturas` | Lista los borradores y las facturas emitidas: número, fecha, cliente, total y estado. | No |
 
-Line types:
+Tipos de línea:
 
-- `servicio`: a professional service. Carries IRPF, 7 % by default.
-- `bien`: goods re-invoiced at cost. Never carries IRPF.
+- `servicio`: un servicio profesional. Lleva IRPF, un 7 % por defecto.
+- `bien`: bienes que se refacturan a precio de coste. Nunca llevan IRPF.
 
-Both carry IVA at 21 % unless the line says otherwise (10 % and 4 % are also accepted).
+Los dos llevan IVA al 21 % salvo que la línea indique otro tipo (también se admiten el 10 % y el 4 %).
 
-## Safety rules
+## Reglas de seguridad
 
-1. **Nothing is issued without `confirm: true`.** It must be the boolean `true`; "yes" or `1` are refused. The tool description tells Claude to set it only after you explicitly confirm that specific draft.
-2. **Sandbox by default.** Production needs `FACTURAS_ENV=production` in the server's configuration. A tool argument alone can never reach production.
-3. **Production needs a second confirmation.** When the server is in production, each `emitir_factura` call must also say `entorno: "production"`. A caller that thinks it is testing therefore cannot issue a real invoice.
-4. **Keys are tied to the environment.** In sandbox, the BeeL adapter refuses any key that does not start with `beel_sk_test_`. In production it requires `beel_sk_live_`. BeeL uses one URL for both environments and the key decides, so this check is what keeps sandbox off production.
-5. **The mock cannot run as production.** `FACTURAS_ENV=production` with `FACTURAS_PROVIDER=mock` stops the server at startup.
-6. **Numbers are never reused.** Issues run one at a time. The number is reserved before calling the provider, and what happens to it depends on the provider's answer:
-   - **Rejected** (validation or auth error, nothing registered): the number is released, so the series stays correlative.
-   - **Unknown** (timeout, 5xx): the number stays reserved for that same draft, and no other draft can be issued until you retry it. The retry looks the invoice up by its draft id (`external_ref` in BeeL), so it can never create a duplicate.
-7. **Sandbox and production never share numbers.** Each environment has its own data folder.
-8. **No secrets in the repo.** Issuer data and keys live in `~/.config/facturas-mcp/.env`, outside the repo. Only `.env.example` with placeholders is committed. `data/` and `.env` are gitignored.
+1. **No se emite nada sin `confirm: true`.** Tiene que ser el booleano `true`; se rechazan valores como "sí" o `1`. La descripción de la herramienta indica a Claude que solo lo ponga después de que confirmes expresamente ese borrador concreto.
+2. **Sandbox por defecto.** Para producción hace falta `FACTURAS_ENV=production` en la configuración del servidor. Un argumento de la herramienta, por sí solo, nunca llega a producción.
+3. **Producción exige una segunda confirmación.** Cuando el servidor está en producción, cada llamada a `emitir_factura` debe indicar además `entorno: "production"`. Así, quien llame creyendo que está en pruebas no puede emitir una factura real.
+4. **Las claves van ligadas al entorno.** En sandbox, el adaptador de BeeL rechaza cualquier clave que no empiece por `beel_sk_test_`. En producción exige `beel_sk_live_`. BeeL usa la misma URL para los dos entornos y es la clave la que decide, así que esta comprobación es lo que impide que el sandbox acabe en producción.
+5. **El mock no puede funcionar en producción.** Con `FACTURAS_ENV=production` y `FACTURAS_PROVIDER=mock`, el servidor se detiene al arrancar.
+6. **Los números nunca se reutilizan.** Las facturas se emiten de una en una. El número se reserva antes de llamar al proveedor, y lo que ocurre con él depende de la respuesta:
+   - **Rechazo** (error de validación o de autenticación; no se ha registrado nada): el número se libera y la serie sigue siendo correlativa.
+   - **Resultado desconocido** (tiempo de espera agotado, error 5xx): el número sigue reservado para ese mismo borrador y no se puede emitir ningún otro hasta que lo reintentes. El reintento busca la factura por el id del borrador (`external_ref` en BeeL), así que nunca puede crear un duplicado.
+7. **Sandbox y producción nunca comparten números.** Cada entorno tiene su propia carpeta de datos.
+8. **Ningún secreto en el repositorio.** Los datos del emisor y las claves están en `~/.config/facturas-mcp/.env`, fuera del repositorio. Solo se versiona `.env.example`, con valores de ejemplo. `data/` y `.env` están en `.gitignore`.
 
-## Setup
+## Instalación
 
-Requires Node.js 22 or newer.
+Requiere Node.js 22 o posterior.
 
 ```sh
 npm install
@@ -53,7 +53,7 @@ npm run build
 npm test
 ```
 
-Configuration: copy the example outside the repo and fill it in.
+Configuración: copia el ejemplo fuera del repositorio y rellénalo.
 
 ```sh
 mkdir -p ~/.config/facturas-mcp
@@ -61,87 +61,87 @@ cp .env.example ~/.config/facturas-mcp/.env
 chmod 600 ~/.config/facturas-mcp/.env
 ```
 
-The server reads, highest priority first:
+El servidor lee, de mayor a menor prioridad:
 
-1. real environment variables;
-2. the file at `FACTURAS_CONFIG_FILE` (default `~/.config/facturas-mcp/.env`);
-3. a `.env` in the repo root (gitignored).
+1. las variables de entorno reales;
+2. el fichero indicado en `FACTURAS_CONFIG_FILE` (por defecto, `~/.config/facturas-mcp/.env`);
+3. un `.env` en la raíz del repositorio (excluido en `.gitignore`).
 
-| Variable | Default | Meaning |
+| Variable | Valor por defecto | Significado |
 |---|---|---|
-| `FACTURAS_ENV` | `sandbox` | `sandbox` or `production`. Anything else stops the server. |
-| `FACTURAS_PROVIDER` | `mock` | `mock` (nothing leaves your machine) or `beel` |
-| `FACTURAS_NUMERO_INICIAL` | `2026003` | First number to issue, format `YYYYNNN`. Raising it moves the series forward; it never goes back. A new year restarts at `YYYY001`. |
-| `FACTURAS_IRPF_POR_DEFECTO` | `7` | IRPF % on service lines |
-| `FACTURAS_EMISOR_*` | none | Issuer name, NIF, address, IBAN and email. The IBAN goes on the invoice as the bank-transfer payment method. |
-| `BEEL_API_KEY` | none | `beel_sk_test_…` for the sandbox |
-| `BEEL_COMPANY_ID` | none | UUID of your company in BeeL |
-| `BEEL_SERIES_ID` | company default | UUID of the STANDARD series |
-| `FACTURAS_DATA_DIR` | `<repo>/data` | Drafts and series state, one subfolder per environment |
-| `FACTURAS_PDF_DIR` | `<data>/<env>/pdf` | Where PDFs are saved |
+| `FACTURAS_ENV` | `sandbox` | `sandbox` o `production`. Cualquier otro valor detiene el servidor. |
+| `FACTURAS_PROVIDER` | `mock` | `mock` (nada sale de tu equipo) o `beel` |
+| `FACTURAS_NUMERO_INICIAL` | `AAAA001` del año en curso (p. ej. `2026001`) | Primer número que se emite, con formato `AAAANNN`. Si continúas una serie que ya tiene facturas, indícalo expresamente: por ejemplo, si ya emitiste la 2026001, pon `2026002`. Subirlo hace avanzar la serie; nunca retrocede. Con el año nuevo, la serie vuelve a empezar en `AAAA001`. |
+| `FACTURAS_IRPF_POR_DEFECTO` | `7` | % de IRPF en las líneas de servicio |
+| `FACTURAS_EMISOR_*` | ninguno | Nombre, NIF, dirección, IBAN y correo electrónico del emisor. El IBAN figura en la factura como forma de pago por transferencia. |
+| `BEEL_API_KEY` | ninguno | `beel_sk_test_…` para el sandbox |
+| `BEEL_COMPANY_ID` | ninguno | UUID de tu empresa en BeeL |
+| `BEEL_SERIES_ID` | serie por defecto de la empresa | UUID de la serie STANDARD |
+| `FACTURAS_DATA_DIR` | `<repo>/data` | Borradores y estado de la serie, con una subcarpeta por entorno |
+| `FACTURAS_PDF_DIR` | `<data>/<env>/pdf` | Dónde se guardan los PDF |
 
-With the default `FACTURAS_PROVIDER=mock`, everything works offline:
+Con el valor por defecto, `FACTURAS_PROVIDER=mock`, todo funciona sin conexión:
 
-- `crear_borrador` and `listar_facturas` behave normally.
-- `emitir_factura` assigns real series numbers in the local sandbox folder.
-- `descargar_pdf` writes a PDF marked "MOCK, SIN VALIDEZ FISCAL".
+- `crear_borrador` y `listar_facturas` funcionan con normalidad.
+- `emitir_factura` asigna números reales de la serie en la carpeta local del sandbox.
+- `descargar_pdf` genera un PDF marcado como "MOCK, SIN VALIDEZ FISCAL".
 
-## Add it to Claude Code
+## Añadirlo a Claude Code
 
-Run this from the repo root:
+Ejecuta esto desde la raíz del repositorio:
 
 ```sh
 claude mcp add facturas --scope user -- node "$PWD/dist/index.js"
 ```
 
-Keep keys in `~/.config/facturas-mcp/.env`. Avoid `-e BEEL_API_KEY=…`, because `claude mcp add -e` stores the value in Claude Code's own config file.
+Guarda las claves en `~/.config/facturas-mcp/.env`. Evita `-e BEEL_API_KEY=…`, porque `claude mcp add -e` guarda el valor en el propio fichero de configuración de Claude Code.
 
-Check it with `claude mcp list`, or `/mcp` inside Claude Code. The server logs its environment to stderr on startup, for example `entorno=sandbox · proveedor=mock`.
+Compruébalo con `claude mcp list`, o con `/mcp` dentro de Claude Code. Al arrancar, el servidor escribe su entorno en stderr, por ejemplo `entorno=sandbox · proveedor=mock`.
 
-Example prompt: *"Crea un borrador para Cliente SL (B12345674, Calle X 1, 28001 Madrid): servicio de consultoría 1.700 €, material revendido 727,19 €. Ya ha pagado 500 €."* Claude will show the summary. It issues the invoice only after you say so.
+Ejemplo de petición: *"Crea un borrador para Cliente SL (B12345674, Calle X 1, 28001 Madrid): servicio de consultoría 1.700 €, material revendido 727,19 €. Ya ha pagado 500 €."* Claude te mostrará el resumen y solo emitirá la factura cuando se lo indiques.
 
-## BeeL sandbox: what you need to do
+## Sandbox de BeeL: qué tienes que hacer
 
-No account was created while building this. To move from the mock to the BeeL sandbox (free, no card, sends to the **AEAT test environment** only):
+Durante el desarrollo no se creó ninguna cuenta. Para pasar del mock al sandbox de BeeL (gratuito, sin tarjeta, y que solo envía al **entorno de pruebas de la AEAT**):
 
-1. **Sign up.** Go to <https://app.beel.es/signup> and set up your company (your NIF and address) in the dashboard.
-2. **Create a sandbox key.** In Settings → API Keys, create a key with prefix `beel_sk_test_` and scopes `invoices:read` and `invoices:write`. Add `series:write` if you want to create the series by API.
-3. **Get your company UUID.** Find it in the dashboard or with:
+1. **Regístrate.** Entra en <https://app.beel.es/signup> y da de alta tu empresa (tu NIF y tu dirección) en el panel.
+2. **Crea una clave de sandbox.** En Settings → API Keys, crea una clave con el prefijo `beel_sk_test_` y los permisos (scopes) `invoices:read` e `invoices:write`. Añade `series:write` si quieres crear la serie por API.
+3. **Obtén el UUID de tu empresa.** Está en el panel, o puedes consultarlo con:
    ```sh
    curl -s https://app.beel.es/api/v1/me/identity -H "Authorization: Bearer $BEEL_API_KEY"
    ```
-4. **Create the series in the sandbox** so BeeL's numbers match yours: document type STANDARD, format `{YYYY}{NUM:3}`, `counter_reset` ANNUAL, `initial_number` 3, default series. Do this in the dashboard or via `POST /v1/companies/{company_id}/series`. Two notes:
-   - BeeL locks the format once the series has issued an invoice. Check that the first sandbox invoice comes out as `2026003`.
-   - If BeeL assigns a different number, the server records BeeL's number and shows a warning.
-5. **Configure the server.** Put `FACTURAS_PROVIDER=beel`, `BEEL_API_KEY` and `BEEL_COMPANY_ID` in `~/.config/facturas-mcp/.env`, then restart Claude Code.
-6. **Test in the sandbox.** Create a draft, issue it with confirmation, download the PDF, and check the QR and amounts.
+4. **Crea la serie en el sandbox** para que la numeración de BeeL coincida con la tuya: tipo de documento STANDARD, formato `{YYYY}{NUM:3}`, `counter_reset` ANNUAL y marcada como serie por defecto. `initial_number` tiene que ser el siguiente número de tu serie, es decir, los tres últimos dígitos de `FACTURAS_NUMERO_INICIAL` sin ceros a la izquierda: `1` si la serie empieza de cero este año (2026001), o `2` si ya emitiste la 2026001 con otro programa (2026002). Puedes hacerlo en el panel o con `POST /v1/companies/{company_id}/series`. Dos observaciones:
+   - BeeL bloquea el formato en cuanto la serie ha emitido una factura. Comprueba que la primera factura del sandbox sale con el número que espera el servidor (el de `FACTURAS_NUMERO_INICIAL`).
+   - Si BeeL asigna un número distinto, el servidor registra el número de BeeL y muestra un aviso.
+5. **Configura el servidor.** Pon `FACTURAS_PROVIDER=beel`, `BEEL_API_KEY` y `BEEL_COMPANY_ID` en `~/.config/facturas-mcp/.env` y reinicia Claude Code.
+6. **Prueba en el sandbox.** Crea un borrador, emítelo con confirmación, descarga el PDF y revisa el QR y los importes.
 
-**Moving to production later** (not done, and not to be done without a decision):
+**Pasar a producción más adelante** (no está hecho, y no debe hacerse sin haberlo decidido antes):
 
-1. Activate the BeeL API plan for your NIF (~15 €/month annual, 19 €/month monthly, plus IVA).
-2. Create a `beel_sk_live_` key and the same series in the live environment.
-3. Set `FACTURAS_ENV=production`.
+1. Activa el plan API de BeeL para tu NIF (~15 €/mes en el plan anual, 19 €/mes en el mensual, más IVA).
+2. Crea una clave `beel_sk_live_` y la misma serie en el entorno real.
+3. Configura `FACTURAS_ENV=production`.
 
-## Limitations
+## Limitaciones
 
-- **Already paid** is shown on the PDF only as a note ("Importe ya abonado… Importe pendiente…"). BeeL has no partial-payment field, so BeeL's own "total a pagar" still shows the full total.
-- **Issue date** is always the day you issue (BeeL sets it). Use `fecha_operacion` for a service delivered on an earlier day.
-- **Out of scope:** exempt (0 %) IVA, simplified invoices, corrective invoices and voids. Use BeeL's dashboard or its own MCP (`claude mcp add --transport http beel https://mcp.beel.es/mcp`) for those.
-- **Amount cross-check:** our amounts round IVA once per rate, and are compared with BeeL's totals on every issue. A difference is reported as a warning, and BeeL's PDF is the legal document.
-- **Untested against the live API:** the BeeL adapter follows BeeL's OpenAPI 1.9.0 and is covered by tests with a scripted `fetch`. It has not yet run against the real sandbox, because no key exists yet.
+- **Lo ya pagado** solo aparece en el PDF como nota ("Importe ya abonado… Importe pendiente…"). BeeL no tiene un campo de pago parcial, así que el "total a pagar" del propio BeeL sigue mostrando el total completo.
+- **La fecha de emisión** es siempre el día en que emites (la fija BeeL). Usa `fecha_operacion` para un servicio prestado un día anterior.
+- **Fuera del alcance:** IVA exento (0 %), facturas simplificadas, facturas rectificativas y anulaciones. Para eso, usa el panel de BeeL o su propio MCP (`claude mcp add --transport http beel https://mcp.beel.es/mcp`).
+- **Contraste de importes:** nuestros importes redondean el IVA una vez por tipo y se comparan con los totales de BeeL en cada emisión. Si hay una diferencia, se muestra como aviso, y el documento legal es el PDF de BeeL.
+- **Sin probar contra la API real:** el adaptador de BeeL sigue el OpenAPI 1.9.0 de BeeL y está cubierto por tests con un `fetch` simulado. Todavía no se ha ejecutado contra el sandbox real, porque aún no existe ninguna clave.
 
-## Development
+## Desarrollo
 
 ```sh
-npm test            # vitest: amounts, guard, numbering, BeeL mapping, end-to-end over MCP
+npm test            # vitest: importes, controles, numeración, mapeo a BeeL, extremo a extremo por MCP
 npm run typecheck   # src + tests
 npm run build       # dist/
 ```
 
-Code layout:
+Estructura del código:
 
-- `src/invoice.ts`: amounts and validation
-- `src/numbering.ts`: series rules
-- `src/issue.ts`: issue guard and orchestration
-- `src/providers/`: adapter interface, `beel.ts`, `mock.ts`
-- `src/server.ts`: MCP tools
+- `src/invoice.ts`: importes y validación
+- `src/numbering.ts`: reglas de la serie
+- `src/issue.ts`: controles y orquestación de la emisión
+- `src/providers/`: interfaz de los adaptadores, `beel.ts`, `mock.ts`
+- `src/server.ts`: herramientas MCP

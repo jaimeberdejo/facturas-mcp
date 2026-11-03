@@ -1,7 +1,7 @@
 {
   "name": "facturas-mcp",
   "version": "0.1.0",
-  "description": "MCP server to draft and issue Spanish VERI*FACTU invoices through a compliant third-party provider (BeeL).",
+  "description": "Servidor MCP para preparar y emitir facturas españolas VERI*FACTU a través de un proveedor externo que ya es un SIF conforme (BeeL).",
   "private": true,
   "type": "module",
   "bin": {

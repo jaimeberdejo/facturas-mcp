@@ -1,155 +1,155 @@
-# VERI*FACTU invoicing APIs for a single autónomo
+# APIs de facturación VERI*FACTU para un autónomo
 
-**Checked:** 3 Nov 2026. All facts below come from the providers' public pages on that date (URLs per section). Nothing was signed up for. "Not confirmed" means the public pages did not say.
+**Revisado:** 3 nov 2026. Todos los datos de este documento proceden de las páginas públicas de los proveedores en esa fecha (las URL están en cada sección). No se dio de alta ninguna cuenta. "Sin confirmar" significa que las páginas públicas no lo decían.
 
-**Profile:** Spanish autónomo, ~5–30 B2B invoices/year to Spanish companies. Service lines with IRPF 7 %, goods re-invoiced at cost without IRPF, IVA 21 %, sometimes an amount already paid.
+**Perfil:** autónomo en España, ~5–30 facturas B2B al año a empresas españolas. Líneas de servicio con IRPF del 7 %, bienes refacturados a precio de coste sin IRPF, IVA del 21 % y, a veces, un importe ya pagado.
 
-**Constraint:** we do not build our own SIF (no hash chain, no SOAP to AEAT, no declaración responsable). The provider must be the SIF: it registers the record with AEAT and produces the invoice PDF with the VERI*FACTU QR.
+**Restricción:** no construimos un SIF propio (no calculamos huellas ni encadenamos registros, no hay SOAP con la AEAT ni declaración responsable). El proveedor tiene que ser el SIF: envía el registro de facturación a la AEAT y genera el PDF de la factura con el QR VERI*FACTU.
 
-## Recommendation: BeeL
+## Recomendación: BeeL
 
-Use **BeeL** (beel.es) behind a thin MCP server of our own.
+Usar **BeeL** (beel.es) detrás de un servidor MCP propio y ligero.
 
-1. **IRPF per line.** Each line has its own `irpf_rate`. Services carry 7 and goods carry 0 on the same invoice. Among the APIs checked, BeeL is the only one that documents this per line.
-2. **It is a full SIF.** The draft → issue lifecycle, AEAT submission, and the PDF with the QR are all inside BeeL. It also ships the declaración responsable. Our code sends no fiscal record.
-3. **Free, unlimited sandbox.** Sign-up is needed, but no card. Test keys (`beel_sk_test_…`) go to the AEAT *test* environment, and the key prefix selects the environment.
-4. **Good API.** OpenAPI 3.0.3 spec (v1.9.0), idempotency keys, a series with a configurable `initial_number` (we can continue at 2026003), a PDF endpoint, an Excel export, and a Node SDK.
-5. **Cost.** Production is 15 €/month on the annual plan (180 €/year + IVA) or 19 €/month on the monthly plan. You pay only from the moment the NIF is activated in production. The 250-invoices/month quota is irrelevant at this volume.
+1. **IRPF por línea.** Cada línea tiene su propio `irpf_rate`. En una misma factura, los servicios llevan 7 y los bienes, 0. De las API revisadas, BeeL es la única que documenta esto por línea.
+2. **Es un SIF completo.** El ciclo borrador → emisión, el envío a la AEAT y el PDF con el QR están dentro de BeeL. También aporta la declaración responsable. Nuestro código no envía ningún registro fiscal.
+3. **Sandbox gratuito e ilimitado.** Hace falta registrarse, pero no una tarjeta. Las claves de prueba (`beel_sk_test_…`) van al entorno de *pruebas* de la AEAT, y el prefijo de la clave elige el entorno.
+4. **Buena API.** Especificación OpenAPI 3.0.3 (v1.9.0), claves de idempotencia, series con `initial_number` configurable (podemos continuar en 2026003), un endpoint de PDF, exportación a Excel y un SDK para Node.
+5. **Coste.** Producción cuesta 15 €/mes en el plan anual (180 €/año + IVA) o 19 €/mes en el mensual. Solo se paga desde que se activa el NIF en producción. El cupo de 250 facturas/mes es irrelevante con este volumen.
 
-**Does BeeL's own MCP already cover everything?** Almost, but not safely enough to use on its own:
+**¿El MCP de BeeL ya lo cubre todo?** Casi, pero no con la seguridad suficiente para usarlo solo:
 
-- `@beel_es/mcp` (local, API key) and `https://mcp.beel.es/mcp` (remote, OAuth) expose about 129 API tools: create, issue, PDF, list and more.
-- It has **no human-confirmation guard** on issuing. Issuing is irreversible.
-- It has **no "sandbox unless explicitly production" rule**. The key decides.
-- It **does not apply "IRPF only on services"**. A line that omits `irpf_rate` *inherits the company default*, which is a trap.
-- It does **not model "already paid"**. BeeL has no partial-payment field.
+- `@beel_es/mcp` (local, con clave API) y `https://mcp.beel.es/mcp` (remoto, OAuth) exponen unas 129 herramientas de la API: crear, emitir, PDF, listar y más.
+- **No pide confirmación humana** antes de emitir. Emitir es irreversible.
+- **No tiene la regla de "sandbox salvo que se pida producción expresamente".** Decide la clave.
+- **No aplica "IRPF solo en servicios".** Una línea que omite `irpf_rate` *hereda el valor por defecto de la empresa*, lo que es una trampa.
+- **No modela lo ya pagado.** BeeL no tiene un campo de pago parcial.
 
-So our server stays small. It holds local drafts, the amount check, the services-only IRPF rule, the confirm/production guards and number continuity. BeeL does the fiscal work. For anything outside our 4 tools (customers, corrective invoices, voids), BeeL's own MCP can be added alongside ours.
+Por eso nuestro servidor puede ser pequeño. Se encarga de los borradores locales, la comprobación de importes, la regla de IRPF solo en servicios, los controles de confirmación y de producción y la continuidad de la numeración. BeeL hace el trabajo fiscal. Para lo que quede fuera de nuestras 4 herramientas (clientes, facturas rectificativas, anulaciones), se puede añadir el MCP de BeeL junto al nuestro.
 
-**A cheaper option to weigh:** the AEAT's free VERI*FACTU app, already in use for 2026001–2026002, costs 0 €. It is enough for 5–30 invoices/year typed in by hand. BeeL's ~180 €/year buys automation from Claude, not compliance. See "Open decisions" below.
+**Una opción más barata que conviene valorar:** la aplicación gratuita VERI*FACTU de la AEAT, que ya se usa para la 2026001 y la 2026002, cuesta 0 €. Basta para 5–30 facturas al año introducidas a mano. Los ~180 €/año de BeeL pagan la automatización desde Claude, no el cumplimiento. Ver "Decisiones pendientes" más abajo.
 
-## Comparison
+## Comparativa
 
 | | **BeeL** | **Invopop** | **Verifacti** | **B2Brouter** |
 |---|---|---|---|---|
-| What it is | Invoicing SIF with an API | Invoicing platform with GOBL documents and workflows | VERI*FACTU *registro* API only | e-invoicing platform plus an API |
-| Price for 5–30 inv/yr | Sandbox 0 €. Production 180 €/yr (annual) or 19 €/mo + IVA | Dev plan 0 €/mo with 200 "Pops"/mo; first government app (Spain) free. Probably 0 € (our own arithmetic) | About 2.9 €/NIF/month (third-party listing; own price page has no figures) + 2.90 € e-signature | Web app: free up to 24 transactions/yr, or 110 €/yr. API: sales-led ("desde 348 €" + 800 € setup) |
-| IRPF withholding | ✅ per line, `irpf_rate` (0, 1, 2, 7, 15, 19…) | ⚠️ GOBL has `IRPF` retained tax per line; not confirmed with the VERI*FACTU addon | ❌ no field; retención is outside the registro | ⚠️ invoice-level `withheld_percent` / `amounts_withheld` only |
-| Sandbox | ✅ free, unlimited, AEAT test env; sign-up needed, no card | ✅ sandbox workspace, AEAT pre-production; sign-up needed | ✅ free test company, AEAT test env; sign-up needed | ✅ `api-staging.b2brouter.net`; sign-up needed |
-| API docs | ✅ OpenAPI 3.0.3, guides, error and rule catalogues, llms.txt | ✅ Mintlify docs with some inconsistencies (PUT vs POST) | ✅ Swagger-style reference + ~30 JSON examples; host and auth header not stated | ✅ OpenAPI 3.0.1 (readme.io); unclear auth (header vs basic) |
-| PDF + QR | ✅ PDF with QR, generated by BeeL | ⚠️ PDF workflow step; QR is a URL only ("we do not provide the QR code image") | ❌ no PDF; QR as base64 only | ⚠️ PDFs generated; QR in the tax-report response; QR on PDF not confirmed |
-| Auth | `Authorization: Bearer beel_sk_test_…/live_…` | `Authorization: Bearer <JWT>` | API key per NIF (header not stated) | `X-B2B-API-Key` |
-| SDK | Node SDK; CLI; MCP; Python via plain REST | None found | None (code examples in many languages) | PHP only |
-| Export | `.xlsx` export (summary or per line); paginated JSON list; PDF ZIP | Not found | XML export per period | Invoice list, ledgers, "export history" guide |
-| Numbering | BeeL assigns at issue from a series; `initial_number` configurable | Sequence series with `start` | Caller sends `serie` + `numero` | Caller sends `number` |
-| Built for one autónomo? | ✅ yes ("self-employed professionals in Spain") | ⚠️ yes in principle, but heavy setup (workflows, supplier registration) | ⚠️ yes, but we would build the invoice ourselves | ⚠️ web app yes; the API is sold to integrators |
+| Qué es | SIF de facturación con API | Plataforma de facturación con documentos GOBL y flujos de trabajo | Solo API de *registro* VERI*FACTU | Plataforma de facturación electrónica con API |
+| Precio para 5–30 facturas/año | Sandbox 0 €. Producción 180 €/año (anual) o 19 €/mes + IVA | Plan Dev 0 €/mes con 200 "Pops"/mes; la primera app de administración pública (España), gratis. Probablemente 0 € (cálculo propio) | Unos 2,9 €/NIF/mes (según un listado de terceros; su propia página de precios no muestra cifras) + 2,90 € de firma electrónica | App web: gratis hasta 24 transacciones/año, o 110 €/año. API: venta comercial ("desde 348 €" + 800 € de alta) |
+| Retención de IRPF | ✅ por línea, `irpf_rate` (0, 1, 2, 7, 15, 19…) | ⚠️ GOBL tiene `IRPF` como impuesto retenido por línea; sin confirmar con el complemento VERI*FACTU | ❌ no hay campo; la retención queda fuera del registro | ⚠️ solo a nivel de factura: `withheld_percent` / `amounts_withheld` |
+| Sandbox | ✅ gratuito, ilimitado, entorno de pruebas de la AEAT; requiere registro, sin tarjeta | ✅ espacio de trabajo de sandbox, preproducción de la AEAT; requiere registro | ✅ empresa de prueba gratuita, entorno de pruebas de la AEAT; requiere registro | ✅ `api-staging.b2brouter.net`; requiere registro |
+| Documentación de la API | ✅ OpenAPI 3.0.3, guías, catálogos de errores y de reglas, llms.txt | ✅ documentación en Mintlify con algunas incoherencias (PUT frente a POST) | ✅ referencia al estilo Swagger + ~30 ejemplos JSON; no indica el host ni la cabecera de autenticación | ✅ OpenAPI 3.0.1 (readme.io); autenticación poco clara (cabecera o basic) |
+| PDF + QR | ✅ PDF con QR, generado por BeeL | ⚠️ paso de PDF en el flujo de trabajo; el QR es solo una URL ("we do not provide the QR code image") | ❌ sin PDF; QR solo en base64 | ⚠️ genera PDF; QR en la respuesta del informe fiscal; QR en el PDF sin confirmar |
+| Autenticación | `Authorization: Bearer beel_sk_test_…/live_…` | `Authorization: Bearer <JWT>` | Clave API por NIF (no indica la cabecera) | `X-B2B-API-Key` |
+| SDK | SDK para Node; CLI; MCP; Python mediante REST directo | No se encontró ninguno | Ninguno (ejemplos de código en muchos lenguajes) | Solo PHP |
+| Exportación | Exportación `.xlsx` (resumen o por línea); listado JSON paginado; ZIP de PDF | No se encontró | Exportación XML por periodo | Listado de facturas, libros registro, guía de "export history" |
+| Numeración | BeeL asigna el número al emitir, a partir de una serie; `initial_number` configurable | Series de secuencia con `start` | Quien llama envía `serie` + `numero` | Quien llama envía `number` |
+| ¿Pensado para un autónomo? | ✅ sí ("self-employed professionals in Spain") | ⚠️ en principio sí, pero con una configuración pesada (flujos de trabajo, alta del emisor) | ⚠️ sí, pero tendríamos que generar nosotros la factura | ⚠️ la app web sí; la API se vende a integradores |
 
-**Also seen, not evaluated in depth:**
-- **fiskaly SIGN ES:** aimed at POS and ERP vendors (ISVs). No public price; the SIGN ES API reference did not render; the developer site says its docs are "outdated".
-- **Quaderno:** its VERI*FACTU API is a beta that needs an email to join.
+**También vistos, sin evaluar a fondo:**
+- **fiskaly SIGN ES:** orientado a fabricantes de TPV y ERP (ISV). Sin precio público; la referencia de la API de SIGN ES no se cargaba; el sitio para desarrolladores dice que su documentación está "outdated".
+- **Quaderno:** su API VERI*FACTU es una beta a la que hay que apuntarse por correo electrónico.
 
-## Provider notes
+## Notas por proveedor
 
 ### BeeL
-Sources: https://beel.es/precios, https://docs.beel.es/, https://docs.beel.es/api/openapi (spec read directly), https://docs.beel.es/verifactu/testing-in-sandbox, https://docs.beel.es/guides/series-and-numbering, https://docs.beel.es/guides/amounts-and-rounding, https://docs.beel.es/guides/bulk-operations-and-exports, https://docs.beel.es/mcp/tools, https://github.com/beel-es/beel-mcp
+Fuentes: https://beel.es/precios, https://docs.beel.es/, https://docs.beel.es/api/openapi (especificación leída directamente), https://docs.beel.es/verifactu/testing-in-sandbox, https://docs.beel.es/guides/series-and-numbering, https://docs.beel.es/guides/amounts-and-rounding, https://docs.beel.es/guides/bulk-operations-and-exports, https://docs.beel.es/mcp/tools, https://github.com/beel-es/beel-mcp
 
-**Price**
-- Sandbox: "0 € para siempre", no card.
-- API plan: 19 €/month, or 15 €/month billed 180 €/year, for one NIF. Includes 250 invoices/month, then 0.01 € each. IVA not included, no lock-in. "Solo pagas al activar tu NIF en producción."
-- The docs say an API plan is required for full API access. They imply the sandbox API works on the free plan but do not say so outright. Verify after sign-up.
+**Precio**
+- Sandbox: "0 € para siempre", sin tarjeta.
+- Plan API: 19 €/mes, o 15 €/mes facturados como 180 €/año, para un NIF. Incluye 250 facturas/mes; a partir de ahí, 0,01 € cada una. IVA no incluido, sin permanencia. "Solo pagas al activar tu NIF en producción."
+- La documentación dice que hace falta un plan API para tener acceso completo a la API. Da a entender que la API del sandbox funciona con el plan gratuito, pero no lo dice expresamente. Hay que comprobarlo después del registro.
 
-**Base URL and auth**
-- Base URL is `https://app.beel.es/api` for both environments. `beel_sk_test_*` means sandbox and `beel_sk_live_*` means production.
-- Keys are scoped (`invoices:write`, `invoices:read`…).
-- Check a key with `GET /v1/me/identity`.
+**URL base y autenticación**
+- La URL base es `https://app.beel.es/api` para los dos entornos. `beel_sk_test_*` significa sandbox y `beel_sk_live_*`, producción.
+- Las claves tienen permisos acotados (`invoices:write`, `invoices:read`…).
+- Una clave se puede comprobar con `GET /v1/me/identity`.
 
-**Endpoints we use** (company-scoped; the flat `/v1/invoices` routes are deprecated and retire 9 Dec 2026):
-- `POST /v1/companies/{company_id}/invoices` with `options.issue_directly: true` creates and issues in one call. With `Idempotency-Key`, a retry within 24 h replays the first response.
-- `GET /v1/companies/{company_id}/invoices/{invoice_id}/pdf` returns a pre-signed `download_url` valid 5 min. It waits up to 10 s, otherwise returns `202` with `Retry-After`.
-- `POST /v1/companies/{company_id}/series` sets `format`, `counter_reset`, `initial_number`.
+**Endpoints que usamos** (bajo la ruta de la empresa; las rutas planas `/v1/invoices` están obsoletas y se retiran el 9 dic 2026):
+- `POST /v1/companies/{company_id}/invoices` con `options.issue_directly: true` crea y emite en una sola llamada. Con `Idempotency-Key`, un reintento en las 24 h siguientes repite la primera respuesta.
+- `GET /v1/companies/{company_id}/invoices/{invoice_id}/pdf` devuelve una `download_url` prefirmada válida durante 5 min. Espera hasta 10 s; si el PDF no está listo, devuelve `202` con `Retry-After`.
+- `POST /v1/companies/{company_id}/series` fija `format`, `counter_reset` e `initial_number`.
 
 **IRPF**
-- `lines[].irpf_rate`. If it is omitted, the line inherits the company default, so we always send it explicitly: 7 on services, 0 on goods.
-- F2 (simplified) invoices reject IRPF.
+- `lines[].irpf_rate`. Si se omite, la línea hereda el valor por defecto de la empresa, así que siempre lo enviamos de forma explícita: 7 en los servicios y 0 en los bienes.
+- Las facturas F2 (simplificadas) no admiten IRPF.
 
-**Numbering and dates**
-- `issue_date` is not an input; BeeL sets it to the day of issue. Past operations use `operation_date`.
-- The number is null on drafts and assigned at issue.
-- Once a series has issued, `format`, `counter_reset` and `initial_number` lock.
+**Numeración y fechas**
+- `issue_date` no es un dato de entrada; BeeL la fija en el día de emisión. Las operaciones de días anteriores usan `operation_date`.
+- El número es nulo en los borradores y se asigna al emitir.
+- Cuando una serie ya ha emitido alguna factura, `format`, `counter_reset` e `initial_number` quedan bloqueados.
 
-**PDF.** The PDF includes the VERI*FACTU QR. A draft has no fiscal PDF.
+**PDF.** El PDF incluye el QR VERI*FACTU. Un borrador no tiene PDF fiscal.
 
-**Already paid.** There is no field. Marking paid is all-or-nothing (`PUT …/status`). We put the already-paid and due amounts in `notes` (max 1,000 characters).
+**Ya pagado.** No hay ningún campo. Marcar como pagada es todo o nada (`PUT …/status`). Ponemos el importe ya pagado y el pendiente en `notes` (máx. 1000 caracteres).
 
 **MCP**
-- Remote is `claude mcp add --transport http beel https://mcp.beel.es/mcp` (OAuth). Local is `npx -y @beel_es/mcp` with `BEEL_API_KEY`.
-- It has local pre-flight checks but no confirmation step.
+- El remoto se añade con `claude mcp add --transport http beel https://mcp.beel.es/mcp` (OAuth). El local, con `npx -y @beel_es/mcp` y `BEEL_API_KEY`.
+- Hace comprobaciones previas en local, pero no tiene ningún paso de confirmación.
 
 ### Invopop
-Sources: https://invopop.com/pricing, https://invopop.com/pricing.md, https://docs.invopop.com/apps/verifactu-spain.md, https://docs.invopop.com/guides/countries/es-verifactu, https://docs.invopop.com/guides/countries/es-verifactu-supplier, https://docs.invopop.com/guides/series.md, https://docs.invopop.com/api-ref/authentication.md, https://docs.gobl.org/regimes/es
+Fuentes: https://invopop.com/pricing, https://invopop.com/pricing.md, https://docs.invopop.com/apps/verifactu-spain.md, https://docs.invopop.com/guides/countries/es-verifactu, https://docs.invopop.com/guides/countries/es-verifactu-supplier, https://docs.invopop.com/guides/series.md, https://docs.invopop.com/api-ref/authentication.md, https://docs.gobl.org/regimes/es
 
-**Price**
-- Dev plan 0 €/month: 200 Pops, first government app free, one user. Pro is 500 €/month.
-- Per invoice: about 2–3 Pops (XML + send + PDF). Supplier registration: 100 Pops. Our volume fits the free plan by our own arithmetic; Invopop does not state this.
+**Precio**
+- Plan Dev, 0 €/mes: 200 Pops, la primera app de administración pública gratis y un usuario. Pro cuesta 500 €/mes.
+- Por factura: unos 2–3 Pops (XML + envío + PDF). Alta del emisor: 100 Pops. Según nuestros propios cálculos, nuestro volumen cabe en el plan gratuito; Invopop no lo afirma.
 
-**Setup.** Setup is heavy:
-- Connect the VERI*FACTU app.
-- Register the supplier with a signed agreement and ID.
-- Build an issue workflow (sequence → sign → XML → send → PDF).
-- Invoices are GOBL JSON put into a silo entry, then run as a transform job.
+**Puesta en marcha.** Es pesada:
+- Conectar la app VERI*FACTU.
+- Dar de alta al emisor con un acuerdo firmado y un documento de identidad.
+- Montar un flujo de emisión (secuencia → firma → XML → envío → PDF).
+- Las facturas son documentos JSON GOBL que se guardan como entrada de un silo y después se procesan como un trabajo de transformación.
 
-**Gaps**
-- No IRPF example in the VERI*FACTU docs.
-- The QR is only a URL ("we do not provide the QR code image itself").
-- No SDK found.
+**Carencias**
+- No hay ningún ejemplo de IRPF en la documentación de VERI*FACTU.
+- El QR es solo una URL ("we do not provide the QR code image itself").
+- No se encontró ningún SDK.
 
-**Worth a second look** if the zero cost matters more than setup effort. The IRPF-per-line behaviour would need a sandbox test.
+**Merece una segunda mirada** si el coste cero importa más que el esfuerzo de configuración. Habría que probar en el sandbox cómo trata el IRPF por línea.
 
 ### Verifacti
-Sources: https://www.verifacti.com/, https://www.verifacti.com/precios, https://www.verifacti.com/docs, https://www.verifacti.com/desarrolladores/ejemplos, https://www.verifacti.com/guia-rapida, https://apps.odoo.com/apps/modules/19.0/verifacti_api
+Fuentes: https://www.verifacti.com/, https://www.verifacti.com/precios, https://www.verifacti.com/docs, https://www.verifacti.com/desarrolladores/ejemplos, https://www.verifacti.com/guia-rapida, https://apps.odoo.com/apps/modules/19.0/verifacti_api
 
-**What it is**
-- A registration API only. It builds the registro (XML, hash chain), sends it to AEAT and returns the QR as base64. It does **not** generate the invoice or the PDF.
-- The IRPF retención is not part of the registro ("la retención no debe indicarse en absoluto").
+**Qué es**
+- Solo una API de registro. Genera el registro (XML, encadenamiento de huellas), lo envía a la AEAT y devuelve el QR en base64. **No** genera la factura ni el PDF.
+- La retención de IRPF no forma parte del registro ("la retención no debe indicarse en absoluto").
 
-**Why it is out.** We would have to generate the legal invoice document and place the QR ourselves. That means building the invoicing half of a SIF, which the project decided against.
+**Por qué se descarta.** Tendríamos que generar nosotros el documento legal de la factura y colocar el QR. Eso supone construir la parte de facturación de un SIF, algo que el proyecto decidió no hacer.
 
-**Other facts**
-- Cheapest by far: about 2.9 €/NIF/month, from a third-party listing; Verifacti's own price page renders no figures.
-- Free test company that calls the AEAT test environment.
-- The caller supplies `serie`/`numero`. `fecha_expedicion` must be today.
+**Otros datos**
+- Es, con diferencia, la más barata: unos 2,9 €/NIF/mes, según un listado de terceros; la página de precios de Verifacti no muestra cifras.
+- Empresa de prueba gratuita que llama al entorno de pruebas de la AEAT.
+- Quien llama aporta `serie`/`numero`. `fecha_expedicion` tiene que ser la de hoy.
 
 ### B2Brouter
-Sources: https://www.b2brouter.net/es/api-verifactu/, https://www.b2brouter.net/es/precios/, https://www.b2brouter.net/es/precios-productos-integrados/, https://docs.b2brouter.net/es/developers/overview/, https://developer.b2brouter.net
+Fuentes: https://www.b2brouter.net/es/api-verifactu/, https://www.b2brouter.net/es/precios/, https://www.b2brouter.net/es/precios-productos-integrados/, https://docs.b2brouter.net/es/developers/overview/, https://developer.b2brouter.net
 
-**Price**
-- Web app: Basic is free but capped at 24 transactions/year, and received invoices and tax declarations count toward it. Professional is 110 €/year + IVA.
-- API: sold through integration plans ("Solicita más información"; the calculator mentions "desde 348 EUR" and an 800 € setup).
+**Precio**
+- App web: el plan Basic es gratuito pero tiene un límite de 24 transacciones/año, y las facturas recibidas y las declaraciones de impuestos cuentan para ese límite. El plan Professional cuesta 110 €/año + IVA.
+- API: se vende mediante planes de integración ("Solicita más información"; la calculadora menciona "desde 348 EUR" y 800 € de alta).
 
-**Gaps**
-- Withholding only at invoice level, which does not fit "IRPF on services only" cleanly.
-- PHP SDK only.
-- Conflicting auth docs.
+**Carencias**
+- La retención solo se aplica a nivel de factura, lo que no encaja bien con "IRPF solo en servicios".
+- Solo hay SDK para PHP.
+- La documentación de autenticación es contradictoria.
 
 ### fiskaly SIGN ES
-Sources: https://www.fiskaly.com/signes/verifactu-for-in-house-teams, https://developer.fiskaly.com/sign-es/integration_process
+Fuentes: https://www.fiskaly.com/signes/verifactu-for-in-house-teams, https://developer.fiskaly.com/sign-es/integration_process
 
-- Targets ISVs and POS vendors. Quote-based pricing.
-- No IRPF information found.
-- The API reference did not render, and the developer site banner says the docs are no longer maintained.
+- Está orientado a ISV y fabricantes de TPV. Precio bajo presupuesto.
+- No se encontró información sobre el IRPF.
+- La referencia de la API no se cargaba, y el aviso del sitio para desarrolladores dice que la documentación ya no se mantiene.
 
-## Legal timeline (affects urgency, not the choice)
+## Calendario legal (afecta a la urgencia, no a la elección)
 
-- **In force:** RDL 15/2025 makes VERI*FACTU mandatory on 1 Jan 2027 for corporate-tax payers and on **1 Jul 2027** for everyone else, including autónomos.
-- **Announced, not in force:** on 5 Oct 2026 Hacienda announced a further postponement to **October 2028**, to align with mandatory B2B e-invoicing. The press reports it is **not yet published in the BOE**, so the 2027 dates stay legally in force until then. Sources:
+- **En vigor:** el RDL 15/2025 hace obligatorio VERI*FACTU el 1 ene 2027 para los contribuyentes del impuesto sobre sociedades y el **1 jul 2027** para el resto, autónomos incluidos.
+- **Anunciado, pero no en vigor:** el 5 oct 2026, Hacienda anunció un nuevo aplazamiento hasta **octubre de 2028**, para hacerlo coincidir con la factura electrónica B2B obligatoria. Según la prensa, **todavía no se ha publicado en el BOE**, así que hasta entonces siguen vigentes las fechas de 2027. Fuentes:
   - https://www.infoautonomos.com/blog/retraso-verifactu/
   - https://emprendedores.es/gestion/aplazamiento-verifactu-2028/
   - https://elderecho.com/hacienda-pospone-a-octubre-de-2028-la-implantacion-de-verifactu-para-empresas-y-autonomos
-  - The Invopop VERI*FACTU guide banner (above)
-- **Effect:** using a VERI*FACTU SIF voluntarily is allowed today. Nothing forces a paid plan before mid-2027 at the earliest.
+  - El aviso de la guía VERI*FACTU de Invopop (citada más arriba)
+- **Consecuencia:** ya se puede usar un SIF VERI*FACTU de forma voluntaria. Nada obliga a contratar un plan de pago antes de mediados de 2027, como pronto.
 
-## Open decisions
+## Decisiones pendientes
 
-1. **Pay for BeeL or stay on the free AEAT app.** The AEAT app is 0 €. BeeL is ~180 €/year + IVA and buys issuing from Claude. The sandbox work costs nothing either way.
-2. **Do not run two systems on the same series.** Once BeeL issues 2026003, stop issuing in the AEAT app (or use a different series there). Two SIFs on one series will collide.
-3. **Continuing the series in a new SIF.** Continuing 2026001/2026002 (AEAT app) with 2026003 (BeeL) keeps the series correlative. Confirm with your gestor that switching software mid-series is fine for your case.
+1. **Pagar BeeL o seguir con la app gratuita de la AEAT.** La app de la AEAT cuesta 0 €. BeeL cuesta ~180 €/año + IVA y permite emitir desde Claude. El trabajo en el sandbox no cuesta nada en ningún caso.
+2. **No usar dos sistemas en la misma serie.** En cuanto BeeL emita la 2026003, deja de emitir en la app de la AEAT (o usa allí otra serie). Dos SIF en la misma serie acabarán chocando.
+3. **Continuar la serie en un SIF nuevo.** Continuar la 2026001 y la 2026002 (app de la AEAT) con la 2026003 (BeeL) mantiene la serie correlativa. Confirma con tu gestor que cambiar de programa a mitad de serie no plantea problemas en tu caso.
