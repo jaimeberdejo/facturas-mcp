@@ -52,7 +52,7 @@ export class BeelProvider implements InvoiceProvider {
     private readonly fetchFn: FetchFn = fetch,
     private readonly sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
   ) {
-    if (!config.apiKey) {
+    if (!config.apiKey || /REPLACE_ME/i.test(config.apiKey)) {
       throw new ConfigError(
         'Falta BEEL_API_KEY. Crea una clave de sandbox (beel_sk_test_…) en app.beel.es → Settings → API Keys.',
       );
@@ -65,7 +65,7 @@ export class BeelProvider implements InvoiceProvider {
           : 'FACTURAS_ENV=production exige una clave de producción (beel_sk_live_…).',
       );
     }
-    if (!config.companyId || !UUID.test(config.companyId)) {
+    if (!config.companyId || !UUID.test(config.companyId) || /^[0-]+$/.test(config.companyId)) {
       throw new ConfigError('Falta BEEL_COMPANY_ID (UUID de tu empresa en BeeL, no el NIF).');
     }
     if (config.seriesId && !UUID.test(config.seriesId)) {
@@ -113,7 +113,7 @@ export class BeelProvider implements InvoiceProvider {
 
   async issueInvoice(request: IssueRequest): Promise<IssueResult> {
     // An earlier attempt may have created it (timeout after BeeL accepted). Look first.
-    const existing = await this.findByExternalRef(request.draft.id);
+    const existing = await this.findByExternalRef(request.draft.id, request.retry);
     if (existing) return this.finishExisting(existing);
 
     try {
@@ -124,7 +124,7 @@ export class BeelProvider implements InvoiceProvider {
       return toResult(created);
     } catch (error) {
       if (error instanceof ProviderError && error.details.code === 'INVOICE_DUPLICATE_EXTERNAL_REFERENCE') {
-        const again = await this.findByExternalRef(request.draft.id);
+        const again = await this.findByExternalRef(request.draft.id, true);
         if (again) return this.finishExisting(again);
         throw new ProviderError(error.message, 'unknown', error.details);
       }
@@ -157,14 +157,17 @@ export class BeelProvider implements InvoiceProvider {
     throw new ProviderError('BeeL sigue generando el PDF. Vuelve a intentarlo en un minuto.', 'rejected');
   }
 
-  private async findByExternalRef(ref: string): Promise<BeelInvoice | undefined> {
+  /**
+   * On a retry, a failed lookup leaves the outcome unknown: an earlier attempt may have
+   * registered the invoice. On a first attempt nothing can exist yet, so the error stands as is.
+   */
+  private async findByExternalRef(ref: string, retry: boolean): Promise<BeelInvoice | undefined> {
     const query = new URLSearchParams({ external_ref: ref, fiscal_only: 'false', limit: '5' });
     let data: { invoices?: BeelInvoice[] };
     try {
       data = await this.call('GET', `${this.companyPath}/invoices?${query}`);
     } catch (error) {
-      // We cannot tell whether an earlier attempt registered it: keep the number reserved.
-      if (error instanceof ProviderError) {
+      if (error instanceof ProviderError && retry) {
         throw new ProviderError(`No se pudo comprobar si la factura ya existe: ${error.message}`, 'unknown', error.details);
       }
       throw error;

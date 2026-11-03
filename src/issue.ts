@@ -78,6 +78,7 @@ export class IssueService {
 
     const series = store.loadSeries();
     let numero: string;
+    const retry = series.pendiente !== undefined;
     if (series.pendiente) {
       if (series.pendiente.borradorId !== draft.id) {
         throw new RefusedError(
@@ -94,7 +95,7 @@ export class IssueService {
 
     let result: IssueResult;
     try {
-      result = await provider.issueInvoice({ draft, expectedNumber: numero, issuer: config.issuer });
+      result = await provider.issueInvoice({ draft, expectedNumber: numero, issuer: config.issuer, retry });
     } catch (error) {
       if (error instanceof ProviderError && error.outcome === 'rejected') {
         // Nothing was registered: release the reservation so the series stays correlative.

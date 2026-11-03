@@ -7,6 +7,11 @@ export interface IssueRequest {
   /** Number our series expects for this invoice (e.g. "2026003"). */
   expectedNumber: string;
   issuer: IssuerConfig;
+  /**
+   * True when an earlier attempt for this draft ended with an unknown outcome, so the provider
+   * may already hold the invoice. False on a first attempt: nothing can exist yet.
+   */
+  retry: boolean;
 }
 
 export interface IssueResult {

@@ -122,7 +122,10 @@ describe('issuing and numbering', () => {
     // Retrying the same draft settles it with the same number.
     const settled = await service(h).issue({ borrador_id: a.id, confirm: true });
     expect(settled.emision.numero).toBe('2026003');
-    expect(h.provider.calls.map((c) => c.expectedNumber)).toEqual(['2026003', '2026003']);
+    expect(h.provider.calls.map((c) => [c.expectedNumber, c.retry])).toEqual([
+      ['2026003', false],
+      ['2026003', true],
+    ]);
     expect((await service(h).issue({ borrador_id: b.id, confirm: true })).emision.numero).toBe('2026004');
   });
 

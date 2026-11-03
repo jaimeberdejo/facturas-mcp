@@ -75,6 +75,13 @@ describe('BeeL adapter: environment safety', () => {
     ).toThrow(/beel_sk_test_/);
   });
 
+  it('refuses the placeholder values from .env.example', () => {
+    expect(() => provider(fetch, 'sandbox', 'beel_sk_test_REPLACE_ME')).toThrow(/BEEL_API_KEY/);
+    expect(
+      () => new BeelProvider({ apiKey: TEST_KEY, companyId: '00000000-0000-0000-0000-000000000000', baseUrl: BASE }, 'sandbox'),
+    ).toThrow(/BEEL_COMPANY_ID/);
+  });
+
   it('requires the company UUID', () => {
     expect(() => new BeelProvider({ apiKey: TEST_KEY, baseUrl: BASE }, 'sandbox')).toThrow(/BEEL_COMPANY_ID/);
   });
@@ -82,7 +89,7 @@ describe('BeeL adapter: environment safety', () => {
 
 describe('BeeL adapter: request mapping', () => {
   it('sends IRPF 7 on services and an explicit 0 on goods', () => {
-    const body = provider(fetch).buildCreateBody({ draft, expectedNumber: '2026003', issuer: {} }) as {
+    const body = provider(fetch).buildCreateBody({ draft, expectedNumber: '2026003', issuer: {}, retry: false }) as {
       lines: { irpf_rate: number; main_tax: unknown; unit_price: number }[];
     };
     expect(body.lines.map((l) => l.irpf_rate)).toEqual([7, 7, 0, 0]);
@@ -94,6 +101,7 @@ describe('BeeL adapter: request mapping', () => {
       draft,
       expectedNumber: '2026003',
       issuer: { iban: 'ES0000000000000000000000' },
+      retry: false,
     });
     expect(body.notes).toBe('Importe ya abonado: 1.108,90 €. Importe pendiente de pago: 2.234,40 €.');
     expect(body.external_ref).toBe(draft.id);
@@ -106,7 +114,7 @@ describe('BeeL adapter: request mapping', () => {
 describe('BeeL adapter: issuing', () => {
   it('looks up the external_ref, then creates and issues in one call', async () => {
     const f = fakeFetch([json(200, { success: true, data: { invoices: [] } }), json(201, { success: true, data: issuedInvoice })]);
-    const result = await provider(f.fn).issueInvoice({ draft, expectedNumber: '2026003', issuer: {} });
+    const result = await provider(f.fn).issueInvoice({ draft, expectedNumber: '2026003', issuer: {}, retry: false });
 
     expect(result).toEqual({
       providerId: issuedInvoice.id,
@@ -124,7 +132,7 @@ describe('BeeL adapter: issuing', () => {
 
   it('recovers an invoice an earlier attempt already issued, without creating another', async () => {
     const f = fakeFetch([json(200, { success: true, data: { invoices: [issuedInvoice] } })]);
-    const result = await provider(f.fn).issueInvoice({ draft, expectedNumber: '2026003', issuer: {} });
+    const result = await provider(f.fn).issueInvoice({ draft, expectedNumber: '2026003', issuer: {}, retry: false });
     expect(result.number).toBe('2026003');
     expect(f.calls).toHaveLength(1);
   });
@@ -135,7 +143,7 @@ describe('BeeL adapter: issuing', () => {
       json(200, { success: true, data: { invoices: [leftover] } }),
       json(200, { success: true, data: issuedInvoice }),
     ]);
-    await provider(f.fn).issueInvoice({ draft, expectedNumber: '2026003', issuer: {} });
+    await provider(f.fn).issueInvoice({ draft, expectedNumber: '2026003', issuer: {}, retry: false });
     expect(f.calls[1]!.url).toBe(`${BASE}/v1/companies/${COMPANY}/invoices/${issuedInvoice.id}/issue?wait_for_pdf=true`);
   });
 
@@ -144,7 +152,7 @@ describe('BeeL adapter: issuing', () => {
       json(200, { success: true, data: { invoices: [] } }),
       json(422, { success: false, error: { code: 'VALIDATION_ERROR', message: 'bad nif' } }),
     ]);
-    const error = await provider(f.fn).issueInvoice({ draft, expectedNumber: '2026003', issuer: {} }).catch((e) => e);
+    const error = await provider(f.fn).issueInvoice({ draft, expectedNumber: '2026003', issuer: {}, retry: false }).catch((e) => e);
     expect(error).toBeInstanceOf(ProviderError);
     expect(error.outcome).toBe('rejected');
     expect(error.details).toEqual({ status: 422, code: 'VALIDATION_ERROR' });
@@ -153,15 +161,22 @@ describe('BeeL adapter: issuing', () => {
   it('treats a 5xx or a network error as unknown', async () => {
     for (const failure of [json(503, { success: false }), new TypeError('fetch failed')]) {
       const f = fakeFetch([json(200, { success: true, data: { invoices: [] } }), failure]);
-      const error = await provider(f.fn).issueInvoice({ draft, expectedNumber: '2026003', issuer: {} }).catch((e) => e);
+      const error = await provider(f.fn).issueInvoice({ draft, expectedNumber: '2026003', issuer: {}, retry: false }).catch((e) => e);
       expect(error.outcome).toBe('unknown');
     }
   });
 
-  it('treats a failed lookup as unknown (cannot rule out an earlier registration)', async () => {
+  it('on a retry, treats a failed lookup as unknown (an earlier attempt may have registered it)', async () => {
     const f = fakeFetch([json(401, { success: false, error: { code: 'UNAUTHORIZED', message: 'no' } })]);
-    const error = await provider(f.fn).issueInvoice({ draft, expectedNumber: '2026003', issuer: {} }).catch((e) => e);
+    const error = await provider(f.fn).issueInvoice({ draft, expectedNumber: '2026003', issuer: {}, retry: true }).catch((e) => e);
     expect(error.outcome).toBe('unknown');
+  });
+
+  it('on a first attempt, a refused lookup is a plain rejection (nothing can exist yet)', async () => {
+    const f = fakeFetch([json(401, { success: false, error: { code: 'UNAUTHORIZED', message: 'no' } })]);
+    const error = await provider(f.fn).issueInvoice({ draft, expectedNumber: '2026003', issuer: {}, retry: false }).catch((e) => e);
+    expect(error.outcome).toBe('rejected');
+    expect(f.calls).toHaveLength(1);
   });
 
   it('resolves a duplicate external_ref by returning the existing invoice', async () => {
@@ -170,7 +185,7 @@ describe('BeeL adapter: issuing', () => {
       json(409, { success: false, error: { code: 'INVOICE_DUPLICATE_EXTERNAL_REFERENCE', message: 'dup' } }),
       json(200, { success: true, data: { invoices: [issuedInvoice] } }),
     ]);
-    const result = await provider(f.fn).issueInvoice({ draft, expectedNumber: '2026003', issuer: {} });
+    const result = await provider(f.fn).issueInvoice({ draft, expectedNumber: '2026003', issuer: {}, retry: false });
     expect(result.providerId).toBe(issuedInvoice.id);
   });
 });
