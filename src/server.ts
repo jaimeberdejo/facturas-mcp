@@ -173,7 +173,9 @@ export function createServer(deps: ServerDeps): McpServer {
         const pdf = await deps.getProvider().downloadPdf(issued);
         const tag = issued.emision.proveedor === 'mock' ? '-MOCK' : issued.emision.entorno === 'sandbox' ? '-SANDBOX' : '';
         mkdirSync(config.pdfDir, { recursive: true, mode: 0o700 });
-        const path = join(config.pdfDir, `Factura-${issued.emision.numero}${tag}.pdf`);
+        // The number comes from the provider and may contain "/" (e.g. 2026/0003): keep the name flat.
+        const safeNumber = issued.emision.numero.replace(/[^A-Za-z0-9_-]/g, '-');
+        const path = join(config.pdfDir, `Factura-${safeNumber}${tag}.pdf`);
         writeFileSync(path, pdf.data, { mode: 0o600 });
         store.saveDraft({ ...issued, emision: { ...issued.emision, pdf: path } });
         return ok(`${envLabel(config.env, config.provider)}\nPDF guardado en ${path} (${pdf.data.length} bytes).`);
