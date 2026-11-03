@@ -31,13 +31,13 @@ const addressSchema = z.object({
   cp: z.string().describe('Código postal (5 dígitos en España)'),
   ciudad: z.string(),
   provincia: z.string(),
-  pais: z.string().optional().describe('Por defecto España'),
+  pais: z.string().optional().describe('Por defecto, España'),
 });
 
 const draftShape = {
   cliente: z.object({
-    nombre: z.string().describe('Razón social del cliente'),
-    nif: z.string().describe('NIF/CIF del cliente'),
+    nombre: z.string().describe('Nombre o razón social del cliente'),
+    nif: z.string().describe('NIF, CIF o NIE del cliente'),
     direccion: addressSchema,
     email: z.string().optional(),
   }),
@@ -45,18 +45,18 @@ const draftShape = {
     .array(
       z.object({
         descripcion: z.string(),
-        cantidad: z.number().optional().describe('Por defecto 1'),
-        precio_unitario: z.number().describe('Precio sin IVA, en euros'),
+        cantidad: z.number().optional().describe('Por defecto, 1'),
+        precio_unitario: z.number().describe('Precio unitario sin IVA, en euros'),
         tipo: z
           .enum(['servicio', 'bien'])
           .describe('"servicio" = servicio profesional (lleva IRPF). "bien" = bien revendido a coste (sin IRPF).'),
-        iva: z.number().optional().describe('Tipo de IVA en %, por defecto 21'),
+        iva: z.number().optional().describe('Tipo de IVA en % (21, 10 o 4); por defecto, 21'),
       }),
     )
     .min(1),
-  irpf: z.number().optional().describe('Retención IRPF en % sobre las líneas de servicio (por defecto la configurada, 7)'),
+  irpf: z.number().optional().describe('Retención de IRPF en % sobre las líneas de servicio; por defecto, la configurada en el servidor (7 si no se cambia)'),
   ya_pagado: z.number().optional().describe('Importe que el cliente ya ha pagado, en euros'),
-  fecha_operacion: z.string().optional().describe('AAAA-MM-DD si el servicio se prestó otro día distinto al de emisión'),
+  fecha_operacion: z.string().optional().describe('Fecha de la operación (AAAA-MM-DD) si el servicio se prestó un día distinto al de emisión'),
   notas: z.string().optional().describe('Texto libre que aparecerá en la factura'),
 };
 
@@ -153,7 +153,7 @@ export function createServer(deps: ServerDeps): McpServer {
     'descargar_pdf',
     {
       title: 'Descargar PDF de una factura emitida',
-      description: 'Descarga del proveedor el PDF (con el QR VERI*FACTU) de una factura emitida y lo guarda en la carpeta local de PDFs.',
+      description: 'Descarga del proveedor el PDF (con el QR VERI*FACTU) de una factura emitida y lo guarda en la carpeta local de PDF.',
       inputSchema: {
         numero: z.string().optional().describe('Número de factura, p. ej. 2026001'),
         borrador_id: z.string().optional().describe('Alternativa al número: id del borrador emitido'),
@@ -188,7 +188,7 @@ export function createServer(deps: ServerDeps): McpServer {
       title: 'Listar borradores y facturas',
       description: 'Lista los borradores y las facturas emitidas en el entorno actual: número, fecha, cliente, total y estado.',
       inputSchema: {
-        estado: z.enum(['todas', 'borrador', 'emitida']).optional().describe('Filtro, por defecto todas'),
+        estado: z.enum(['todas', 'borrador', 'emitida']).optional().describe('Filtro; por defecto, todas'),
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },

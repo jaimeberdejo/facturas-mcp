@@ -208,11 +208,11 @@ export function buildDraftContent(input: DraftInput, defaultIrpf: number): Draft
       throw new ValidationError(`${field}.precio_unitario: no puede ser negativo`);
     }
     if (raw.tipo !== 'servicio' && raw.tipo !== 'bien') {
-      throw new ValidationError(`${field}.tipo: "servicio" o "bien"`);
+      throw new ValidationError(`${field}.tipo: debe ser "servicio" o "bien"`);
     }
     const iva = raw.iva ?? 21;
     if (!(IVA_RATES as readonly number[]).includes(iva)) {
-      throw new ValidationError(`${field}.iva: ${iva} % no soportado (${IVA_RATES.join(', ')})`);
+      throw new ValidationError(`${field}.iva: ${iva} % no es un tipo admitido (${IVA_RATES.join(', ')})`);
     }
     return {
       descripcion: requireText(raw.descripcion, `${field}.descripcion`, 2000),
@@ -235,7 +235,7 @@ export function buildDraftContent(input: DraftInput, defaultIrpf: number): Draft
   }
 
   if (input.fecha_operacion !== undefined && !isRealDate(input.fecha_operacion)) {
-    throw new ValidationError('fecha_operacion: formato AAAA-MM-DD');
+    throw new ValidationError('fecha_operacion: debe ser una fecha real con formato AAAA-MM-DD');
   }
   const notas = input.notas?.trim();
   if (notas && notas.length > 600) {
