@@ -4,7 +4,7 @@ import type { Cents } from '../money.js';
 
 export interface IssueRequest {
   draft: Draft;
-  /** Number our series expects for this invoice (e.g. "2026003"). */
+  /** Number our series expects for this invoice (e.g. "2026001"). */
   expectedNumber: string;
   issuer: IssuerConfig;
   /**

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { parseEnv } from 'node:util';
 import { ConfigError } from './errors.js';
 import { IRPF_RATES, type Environment } from './invoice.js';
-import { parseInvoiceNumber } from './numbering.js';
+import { firstNumberOfYear, parseInvoiceNumber } from './numbering.js';
 
 export type ProviderName = 'mock' | 'beel';
 
@@ -31,7 +31,7 @@ export interface Config {
   dataDir: string;
   /** Where issued PDFs are written. Defaults to <dataDir>/<env>/pdf. */
   pdfDir: string;
-  /** First number of the series, e.g. "2026003". */
+  /** First number of the series, e.g. "2026001". Defaults to the first number of the current year. */
   numeroInicial: string;
   /** IRPF % applied to service lines when the draft does not say otherwise. */
   irpfPorDefecto: number;
@@ -46,6 +46,11 @@ export const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..
 
 /** Default config file outside the repo, so personal data and keys never sit in the working tree. */
 export const DEFAULT_CONFIG_FILE = join(homedir(), '.config', 'facturas-mcp', '.env');
+
+/** Today's date in Spain (YYYY-MM-DD). Invoice dates follow Spanish time, not UTC. */
+export function todayInSpain(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(now);
+}
 
 function readEnvFile(path: string): Record<string, string> {
   if (!existsSync(path)) return {};
@@ -72,7 +77,12 @@ function optional(value: string | undefined): string | undefined {
   return text ? text : undefined;
 }
 
-export function loadConfig(env: Record<string, string | undefined>): Config {
+/**
+ * Builds the configuration. `today` (YYYY-MM-DD, Spanish time) only sets the default start of the
+ * series: the first number of the current year (e.g. 2026001). Continuing a series that already
+ * has invoices needs FACTURAS_NUMERO_INICIAL set explicitly (e.g. 2026002).
+ */
+export function loadConfig(env: Record<string, string | undefined>, today: string = todayInSpain()): Config {
   const rawEnv = optional(env.FACTURAS_ENV) ?? 'sandbox';
   if (rawEnv !== 'sandbox' && rawEnv !== 'production') {
     throw new ConfigError(`FACTURAS_ENV="${rawEnv}" no es válido: usa "sandbox" (por defecto) o "production"`);
@@ -88,7 +98,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     throw new ConfigError('FACTURAS_ENV=production con el proveedor mock no tiene sentido: no registraría nada.');
   }
 
-  const numeroInicial = optional(env.FACTURAS_NUMERO_INICIAL) ?? '2026003';
+  const numeroInicial = optional(env.FACTURAS_NUMERO_INICIAL) ?? firstNumberOfYear(today);
   parseInvoiceNumber(numeroInicial);
 
   const rawIrpf = optional(env.FACTURAS_IRPF_POR_DEFECTO) ?? '7';

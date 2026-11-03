@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { loadConfig } from '../src/config.js';
+import { loadConfig, todayInSpain } from '../src/config.js';
 import { ConfigError, ProviderError, RefusedError } from '../src/errors.js';
 import { assertIssueAllowed, IssueService } from '../src/issue.js';
 import { nextInvoiceNumber } from '../src/numbering.js';
@@ -63,23 +63,23 @@ describe('issue guard', () => {
 });
 
 describe('issuing and numbering', () => {
-  it('issues the first invoice as 2026003 and the next as 2026004', async () => {
+  it('issues the first invoice as 2026001 and the next as 2026002', async () => {
     h = harness();
     const a = h.addDraft(REFERENCE_INPUT);
     const b = h.addDraft(REFERENCE_INPUT);
     const first = await service(h).issue({ borrador_id: a.id, confirm: true });
     const second = await service(h).issue({ borrador_id: b.id, confirm: true });
-    expect(first.emision.numero).toBe('2026003');
-    expect(second.emision.numero).toBe('2026004');
+    expect(first.emision.numero).toBe('2026001');
+    expect(second.emision.numero).toBe('2026002');
     expect(first.emision.avisos).toEqual([]);
     expect(h.store.getDraft(a.id)?.estado).toBe('emitida');
-    expect(h.store.loadSeries().emitidas.map((e) => e.numero)).toEqual(['2026003', '2026004']);
+    expect(h.store.loadSeries().emitidas.map((e) => e.numero)).toEqual(['2026001', '2026002']);
   });
 
-  it('uses the configured start number', async () => {
-    h = harness({ FACTURAS_NUMERO_INICIAL: '2026010' });
+  it('uses the configured start number to continue an existing series', async () => {
+    h = harness({ FACTURAS_NUMERO_INICIAL: '2026002' });
     const a = h.addDraft(REFERENCE_INPUT);
-    expect((await service(h).issue({ borrador_id: a.id, confirm: true })).emision.numero).toBe('2026010');
+    expect((await service(h).issue({ borrador_id: a.id, confirm: true })).emision.numero).toBe('2026002');
   });
 
   it('refuses to issue the same draft twice', async () => {
@@ -95,7 +95,7 @@ describe('issuing and numbering', () => {
     const s = service(h);
     const drafts = [h.addDraft(REFERENCE_INPUT), h.addDraft(REFERENCE_INPUT), h.addDraft(REFERENCE_INPUT)];
     const issued = await Promise.all(drafts.map((d) => s.issue({ borrador_id: d.id, confirm: true })));
-    expect(issued.map((i) => i.emision.numero).sort()).toEqual(['2026003', '2026004', '2026005']);
+    expect(issued.map((i) => i.emision.numero).sort()).toEqual(['2026001', '2026002', '2026003']);
   });
 
   it('releases the number when the provider rejects (nothing registered)', async () => {
@@ -105,7 +105,7 @@ describe('issuing and numbering', () => {
     await expect(service(h).issue({ borrador_id: a.id, confirm: true })).rejects.toThrow(ProviderError);
     expect(h.store.loadSeries()).toEqual({ emitidas: [] });
     const retry = await service(h).issue({ borrador_id: a.id, confirm: true });
-    expect(retry.emision.numero).toBe('2026003');
+    expect(retry.emision.numero).toBe('2026001');
   });
 
   it('keeps the number reserved for the same draft when the outcome is unknown', async () => {
@@ -114,19 +114,19 @@ describe('issuing and numbering', () => {
     const b = h.addDraft(REFERENCE_INPUT);
     h.provider.failNext = 'unknown';
     await expect(service(h).issue({ borrador_id: a.id, confirm: true })).rejects.toThrow(/queda reservado/);
-    expect(h.store.loadSeries().pendiente).toMatchObject({ borradorId: a.id, numero: '2026003' });
+    expect(h.store.loadSeries().pendiente).toMatchObject({ borradorId: a.id, numero: '2026001' });
 
-    // Another draft cannot jump the queue while 2026003 is unresolved.
+    // Another draft cannot jump the queue while 2026001 is unresolved.
     await expect(service(h).issue({ borrador_id: b.id, confirm: true })).rejects.toThrow(/quedó sin confirmar/);
 
     // Retrying the same draft settles it with the same number.
     const settled = await service(h).issue({ borrador_id: a.id, confirm: true });
-    expect(settled.emision.numero).toBe('2026003');
+    expect(settled.emision.numero).toBe('2026001');
     expect(h.provider.calls.map((c) => [c.expectedNumber, c.retry])).toEqual([
-      ['2026003', false],
-      ['2026003', true],
+      ['2026001', false],
+      ['2026001', true],
     ]);
-    expect((await service(h).issue({ borrador_id: b.id, confirm: true })).emision.numero).toBe('2026004');
+    expect((await service(h).issue({ borrador_id: b.id, confirm: true })).emision.numero).toBe('2026002');
   });
 
   it('records the provider number and warns when it differs from ours', async () => {
@@ -135,10 +135,10 @@ describe('issuing and numbering', () => {
     h.provider.overrideNumber = '2026007';
     const issued = await service(h).issue({ borrador_id: a.id, confirm: true });
     expect(issued.emision.numero).toBe('2026007');
-    expect(issued.emision.avisos[0]).toMatch(/2026007 en lugar de 2026003/);
+    expect(issued.emision.avisos[0]).toMatch(/2026007 en lugar de 2026001/);
     h.provider.overrideNumber = undefined;
     const next = await service(h).issue({ borrador_id: h.addDraft(REFERENCE_INPUT).id, confirm: true });
-    expect(next.emision.numero).toBe('2026008'); // never goes back to 2026003
+    expect(next.emision.numero).toBe('2026008'); // never goes back to 2026001
   });
 
   it('does not issue when the provider is not configured', async () => {
@@ -178,6 +178,14 @@ describe('series rules', () => {
 
   it('rejects a start number from a future year', () => {
     expect(() => nextInvoiceNumber(state(), '2027001', '2026-12-01')).toThrow(ConfigError);
+  });
+
+  it('defaults the start number to the first of the current year (Spanish time)', () => {
+    expect(loadConfig({}, '2026-11-03').numeroInicial).toBe('2026001');
+    expect(loadConfig({}, '2027-03-15').numeroInicial).toBe('2027001');
+    expect(loadConfig({ FACTURAS_NUMERO_INICIAL: '2026002' }, '2026-11-03').numeroInicial).toBe('2026002');
+    // 31 Dec 23:30 UTC is already 1 Jan in Madrid.
+    expect(todayInSpain(new Date('2026-12-31T23:30:00Z'))).toBe('2027-01-01');
   });
 
   it('rejects a start number that is not YYYYNNN', () => {

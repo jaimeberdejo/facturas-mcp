@@ -63,15 +63,15 @@ describe('MCP server (mock provider)', () => {
 
     const issued = await call('emitir_factura', { borrador_id: id, confirm: true });
     expect(issued.isError).toBe(false);
-    expect(issued.text).toContain('Factura 2026003');
+    expect(issued.text).toContain('Factura 2026001');
 
     const listed = await call('listar_facturas');
-    expect(listed.text).toContain(`| 2026003 | 2026-11-03 | Cliente de Prueba SL | 3.343,30 € | emitida | ${id} |`);
+    expect(listed.text).toContain(`| 2026001 | 2026-11-03 | Cliente de Prueba SL | 3.343,30 € | emitida | ${id} |`);
 
-    const pdf = await call('descargar_pdf', { numero: '2026003' });
+    const pdf = await call('descargar_pdf', { numero: '2026001' });
     expect(pdf.isError).toBe(false);
     const path = /PDF guardado en (\S+\.pdf)/.exec(pdf.text)![1]!;
-    expect(path).toMatch(/Factura-2026003-MOCK\.pdf$/);
+    expect(path).toMatch(/Factura-2026001-MOCK\.pdf$/);
     expect(path.startsWith(h.config.dataDir)).toBe(true);
     expect(existsSync(path)).toBe(true);
     expect(readFileSync(path, 'latin1').startsWith('%PDF-1.4')).toBe(true);
@@ -114,6 +114,6 @@ describe('MCP server (mock provider)', () => {
     h.provider.failNext = 'unknown';
     const issued = await call('emitir_factura', { borrador_id: id, confirm: true });
     expect(issued.text).toMatch(/^ERROR DEL PROVEEDOR: .*\n.*queda reservado/);
-    expect((await call('listar_facturas')).text).toContain(`Emisión sin confirmar: borrador ${id}, número 2026003`);
+    expect((await call('listar_facturas')).text).toContain(`Emisión sin confirmar: borrador ${id}, número 2026001`);
   });
 });

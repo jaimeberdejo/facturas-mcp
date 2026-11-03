@@ -1,17 +1,12 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { collectEnv, loadConfig } from './config.js';
+import { collectEnv, loadConfig, todayInSpain } from './config.js';
 import { providerFactory } from './providers/index.js';
 import { createServer } from './server.js';
 import { LocalStore } from './store.js';
 
-/** Today's date in Spain (YYYY-MM-DD). Invoice dates follow Spanish time, not UTC. */
-function todayInSpain(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date());
-}
-
 async function main(): Promise<void> {
-  const config = loadConfig(collectEnv());
+  const config = loadConfig(collectEnv(), todayInSpain());
   const store = new LocalStore(config.dataDir, config.env);
   const deps = {
     config,

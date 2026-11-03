@@ -89,7 +89,8 @@ describe('draft validation', () => {
 });
 
 describe('NIF check', () => {
-  it.each(['12345678Z', 'X1234567L', 'B12345674', 'A58818501', 'Q2826000H'])('accepts %s', (nif) => {
+  // Synthetic IDs with valid control characters (B12345674 is the example from BeeL's docs).
+  it.each(['12345678Z', 'X1234567L', 'B12345674', 'A76543214', 'Q7654321D'])('accepts %s', (nif) => {
     expect(isValidNif(nif)).toBe(true);
   });
   it.each(['12345678A', 'B12345670', 'ABC', ''])('rejects %s', (nif) => {

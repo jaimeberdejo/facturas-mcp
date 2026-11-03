@@ -155,7 +155,7 @@ export function createServer(deps: ServerDeps): McpServer {
       title: 'Descargar PDF de una factura emitida',
       description: 'Descarga del proveedor el PDF (con el QR VERI*FACTU) de una factura emitida y lo guarda en la carpeta local de PDFs.',
       inputSchema: {
-        numero: z.string().optional().describe('Número de factura, p. ej. 2026003'),
+        numero: z.string().optional().describe('Número de factura, p. ej. 2026001'),
         borrador_id: z.string().optional().describe('Alternativa al número: id del borrador emitido'),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },

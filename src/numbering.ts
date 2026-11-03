@@ -25,7 +25,7 @@ export interface SeriesState {
 export function parseInvoiceNumber(numero: string): { year: number; seq: number } {
   const match = NUMBER_PATTERN.exec(numero);
   if (!match) {
-    throw new ConfigError(`Número de factura "${numero}" no sigue el formato AAAANNN (p. ej. 2026003)`);
+    throw new ConfigError(`El número de factura "${numero}" no sigue el formato AAAANNN (p. ej. 2026001)`);
   }
   return { year: Number(match[1]), seq: Number(match[2]) };
 }
@@ -37,6 +37,11 @@ function format(year: number, seq: number): string {
   return `${year}${String(seq).padStart(3, '0')}`;
 }
 
+/** First number of the year of `date` (YYYY-MM-DD), e.g. 2026001. The default start of the series. */
+export function firstNumberOfYear(date: string): string {
+  return format(Number(date.slice(0, 4)), 1);
+}
+
 function compare(a: string, b: string): number {
   return Number(a) - Number(b);
 }
@@ -44,7 +49,7 @@ function compare(a: string, b: string): number {
 /**
  * Next number for an invoice issued on `issueDate` (YYYY-MM-DD).
  *
- * It is the highest of: the configured start (e.g. 2026003) and the last issued number + 1.
+ * It is the highest of: the configured start (e.g. 2026001) and the last issued number + 1.
  * If that number belongs to a past year, the series restarts at {year}001.
  */
 export function nextInvoiceNumber(state: SeriesState, start: string, issueDate: string): string {

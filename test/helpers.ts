@@ -25,9 +25,10 @@ export interface Harness {
 
 export function harness(env: Record<string, string> = {}): Harness {
   const dir = tempDir();
-  const config = loadConfig({ FACTURAS_DATA_DIR: dir.path, ...env });
-  const store = new LocalStore(config.dataDir, config.env);
   let today = '2026-11-03';
+  // The default start of the series is the first number of today's year: 2026001.
+  const config = loadConfig({ FACTURAS_DATA_DIR: dir.path, ...env }, today);
+  const store = new LocalStore(config.dataDir, config.env);
   const provider = new MockProvider(() => today);
   return {
     config,
