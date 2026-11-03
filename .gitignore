@@ -3,4 +3,7 @@
 !.env.example
 node_modules/
 dist/
+coverage/
 .DS_Store
+# Local invoice data (drafts, issued records, PDFs). Never commit it.
+data/
