@@ -24,9 +24,9 @@ Use **BeeL** (beel.es) behind a thin MCP server of our own.
 - It **does not apply "IRPF only on services"**. A line that omits `irpf_rate` *inherits the company default*, which is a trap.
 - It does **not model "already paid"**. BeeL has no partial-payment field.
 
-So our server stays small. It holds local drafts, the amount check, the services-only IRPF rule, the confirm/production guards and number continuity. BeeL does the fiscal work. For anything outside our 4 tools (customers, corrective invoices, voids), Jaime can add BeeL's own MCP alongside ours.
+So our server stays small. It holds local drafts, the amount check, the services-only IRPF rule, the confirm/production guards and number continuity. BeeL does the fiscal work. For anything outside our 4 tools (customers, corrective invoices, voids), BeeL's own MCP can be added alongside ours.
 
-**A cheaper option to weigh:** the AEAT's free VERI*FACTU app, which Jaime already uses, costs 0 €. It is enough for 5–30 invoices/year if he types them by hand. BeeL's ~180 €/year buys automation from Claude, not compliance. See "Decisions for Jaime" below.
+**A cheaper option to weigh:** the AEAT's free VERI*FACTU app, already in use for 2026001–2026002, costs 0 €. It is enough for 5–30 invoices/year typed in by hand. BeeL's ~180 €/year buys automation from Claude, not compliance. See "Open decisions" below.
 
 ## Comparison
 
@@ -148,7 +148,7 @@ Sources: https://www.fiskaly.com/signes/verifactu-for-in-house-teams, https://de
   - The Invopop VERI*FACTU guide banner (above)
 - **Effect:** using a VERI*FACTU SIF voluntarily is allowed today. Nothing forces a paid plan before mid-2027 at the earliest.
 
-## Decisions for Jaime
+## Open decisions
 
 1. **Pay for BeeL or stay on the free AEAT app.** The AEAT app is 0 €. BeeL is ~180 €/year + IVA and buys issuing from Claude. The sandbox work costs nothing either way.
 2. **Do not run two systems on the same series.** Once BeeL issues 2026003, stop issuing in the AEAT app (or use a different series there). Two SIFs on one series will collide.

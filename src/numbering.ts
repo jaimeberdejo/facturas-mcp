@@ -1,7 +1,7 @@
 import { ConfigError, RefusedError } from './errors.js';
 
 /**
- * Invoice numbers follow Jaime's series: 4-digit year + 3-digit sequence (2026001, 2026002…).
+ * Invoice numbers follow the issuer's series: 4-digit year + 3-digit sequence (2026001, 2026002…).
  * A new year restarts at YYYY001. Numbers only move forward; an issued number is never reused.
  */
 const NUMBER_PATTERN = /^(\d{4})(\d{3})$/;
